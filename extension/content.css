@@ -1,0 +1,55 @@
+/* 
+  CyberSafe Extension - Content Script Styles 
+  Injected into every webpage to style the warning markers cleanly without destroying the host page geometry.
+*/
+
+.cybersafe-warning-marker {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  margin-left: 6px !important;
+  padding: 2px 6px !important;
+  background-color: #fef2f2 !important;
+  border: 1px solid #ef4444 !important;
+  border-radius: 4px !important;
+  color: #dc2626 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: 11px !important;
+  font-weight: bold !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+  cursor: help !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2) !important;
+  z-index: 999999 !important;
+  vertical-align: middle !important;
+  transition: all 0.2s ease !important;
+}
+
+.cybersafe-warning-marker:hover {
+  background-color: #fee2e2 !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* For dark mode websites, invert if necessary */
+@media (prefers-color-scheme: dark) {
+  .cybersafe-warning-marker {
+    background-color: #450a0a !important;
+    border-color: #dc2626 !important;
+    color: #fca5a5 !important;
+  }
+  .cybersafe-warning-marker:hover {
+    background-color: #7f1d1d !important;
+  }
+}
+
+.cybersafe-suspicious-link {
+  text-decoration: underline wavy #ef4444 !important;
+  text-decoration-thickness: 2px !important;
+  text-underline-offset: 3px !important;
+  transition: background-color 0.2s !important;
+}
+
+.cybersafe-suspicious-link:hover {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
