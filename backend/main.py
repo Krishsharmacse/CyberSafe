@@ -103,7 +103,7 @@ class CNN_BiLSTM_Video(nn.Module):
             batch_first=True
         )
 
-        self.fc = nn.Sequential(
+        self.classifier = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
@@ -121,7 +121,7 @@ class CNN_BiLSTM_Video(nn.Module):
 
         lstm_out, _ = self.lstm(feats)
 
-        return self.fc(lstm_out[:, -1, :])
+        return self.classifier(lstm_out[:, -1, :])
 
 
 class DeepfakeVideoDetector:
