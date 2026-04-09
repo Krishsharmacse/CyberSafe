@@ -22,14 +22,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-# ==============================
-# DEVICE SETUP
-# ==============================
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ==============================
-# FASTAPI INIT
-# ==============================
+
 app = FastAPI(title="Deepfake Detection API")
 
 app.add_middleware(
@@ -40,9 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==============================
-# AUDIO MODEL (WavLM + Keras)
-# ==============================
+
 KERAS_MODEL_PATH = r"/home/krish-sharma/d drive/Verification Syndicate/Fake News/ALL MODELS/wavlm_classifier_v2.keras"
 WAVLM_MODEL_NAME = "microsoft/wavlm-base-plus"
 
@@ -57,7 +51,7 @@ wavlm_model.eval()
 
 keras_model = tf.keras.models.load_model(KERAS_MODEL_PATH)
 
-print("✅ Audio models loaded")
+print("Audio models loaded")
 
 
 def predict_audio(file_bytes):
@@ -84,9 +78,6 @@ def predict_audio(file_bytes):
         "confidence": float(score if is_fake else 1 - score)
     }
 
-# ==============================
-# VIDEO MODEL (CNN + BiLSTM)
-# ==============================
 VIDEO_MODEL_PATH = r"/home/krish-sharma/d drive/Verification Syndicate/Fake News/ALL MODELS/best_celebdf_model_Krish.pt"
 VIDEO_INPUT_SIZE = 224
 VIDEO_SEQ_LENGTH = 16
