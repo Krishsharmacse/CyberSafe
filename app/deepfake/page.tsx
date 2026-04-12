@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,8 @@ import {
   Waves,
   Film,
   Info,
+  Play,
+  Pause,
 } from 'lucide-react'
 
 const BACKEND_URL = 'http://localhost:8000'
@@ -28,81 +30,53 @@ interface DetectionResult {
   confidence?: number
 }
 
+// ─── Circular Confidence Meter ───────────────────────────────────────────────
 function CircularMeter({ score, isFake }: { score: number; isFake: boolean }) {
   const radius = 54
   const circumference = 2 * Math.PI * radius
   const progress = circumference - (score / 100) * circumference
-  const color = isFake
-    ? score > 80
-      ? '#ef4444' // red
-      : '#f97316' // orange
-    : '#22c55e' // green
+  const color = isFake ? (score > 80 ? '#ef4444' : '#f97316') : '#22c55e'
 
   return (
     <div className="relative w-36 h-36 mx-auto">
       <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
+        <circle cx="64" cy="64" r={radius} fill="none" stroke="currentColor" strokeWidth="10" className="text-muted/30" />
         <circle
-          cx="64" cy="64" r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="10"
-          className="text-muted/30"
-        />
-        <circle
-          cx="64" cy="64" r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={progress}
+          cx="64" cy="64" r={radius} fill="none"
+          stroke={color} strokeWidth="10" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={progress}
           style={{ filter: `drop-shadow(0 0 8px ${color}80)`, transition: 'stroke-dashoffset 1s ease' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="text-3xl font-bold font-mono"
-          style={{ color }}
-        >
-          {Math.round(score)}%
-        </span>
+        <span className="text-3xl font-bold font-mono" style={{ color }}>{Math.round(score)}%</span>
         <span className="text-xs text-muted-foreground mt-0.5">confidence</span>
       </div>
     </div>
   )
 }
 
+// ─── Result Card ─────────────────────────────────────────────────────────────
 function ResultCard({ result, type }: { result: DetectionResult; type: 'audio' | 'video' }) {
   const isFake = result.label.toUpperCase().includes('FAKE') || result.label.toUpperCase().includes('SYNTHETIC')
-  const score = type === 'audio'
-    ? (result.confidence ?? 0) * 100
-    : (result.score ?? 0) * 100
+  const score = type === 'audio' ? (result.confidence ?? 0) * 100 : (result.score ?? 0) * 100
 
   return (
-    <div
-      className={cn(
-        'rounded-2xl border-2 p-8 space-y-6 transition-all duration-500',
-        isFake
-          ? 'border-red-500/50 bg-red-500/5 dark:bg-red-950/20'
-          : 'border-green-500/50 bg-green-500/5 dark:bg-green-950/20'
-      )}
-    >
+    <div className={cn(
+      'rounded-2xl border-2 p-8 space-y-6 transition-all duration-500',
+      isFake ? 'border-red-500/50 bg-red-500/5 dark:bg-red-950/20' : 'border-green-500/50 bg-green-500/5 dark:bg-green-950/20'
+    )}>
       <div className="flex flex-col sm:flex-row items-center gap-6">
         <CircularMeter score={score} isFake={isFake} />
         <div className="flex-1 text-center sm:text-left space-y-3">
           <div className={cn(
             'inline-flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full',
-            isFake
-              ? 'bg-red-500/20 text-red-500'
-              : 'bg-green-500/20 text-green-500'
+            isFake ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'
           )}>
             {isFake ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
             {isFake ? 'DEEPFAKE DETECTED' : 'AUTHENTIC CONTENT'}
           </div>
-          <h3 className={cn(
-            'text-2xl font-extrabold tracking-tight',
-            isFake ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'
-          )}>
+          <h3 className={cn('text-2xl font-extrabold tracking-tight', isFake ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400')}>
             {result.label}
           </h3>
           <p className="text-sm text-muted-foreground">
@@ -117,7 +91,6 @@ function ResultCard({ result, type }: { result: DetectionResult; type: 'audio' |
         </div>
       </div>
 
-      {/* Stats bar */}
       <div className="space-y-2">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>Detection Confidence</span>
@@ -125,36 +98,149 @@ function ResultCard({ result, type }: { result: DetectionResult; type: 'audio' |
         </div>
         <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
-            className={cn(
-              'h-full rounded-full transition-all duration-1000',
-              isFake
-                ? 'bg-gradient-to-r from-orange-500 to-red-500'
-                : 'bg-gradient-to-r from-emerald-400 to-green-500'
-            )}
+            className={cn('h-full rounded-full transition-all duration-1000', isFake ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-emerald-400 to-green-500')}
             style={{ width: `${Math.round(score)}%` }}
           />
         </div>
       </div>
 
-      {/* Disclaimer */}
       <div className="flex gap-2 p-3 bg-muted/30 rounded-lg border border-border text-xs text-muted-foreground">
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>
-          This analysis is AI-assisted and may not be 100% accurate. Always cross-verify with other sources before drawing conclusions.
+        <span>This analysis is AI-assisted and may not be 100% accurate. Always cross-verify with other sources before drawing conclusions.</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Audio Preview Player ─────────────────────────────────────────────────────
+function AudioPreview({ file }: { file: File }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [objectUrl, setObjectUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file)
+    setObjectUrl(url)
+    setPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  const togglePlay = () => {
+    if (!audioRef.current) return
+    if (playing) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setPlaying(!playing)
+  }
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+  const pct = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  if (!objectUrl) return null
+
+  return (
+    <div className="mt-4 p-4 rounded-xl bg-violet-500/5 border border-violet-500/20 space-y-3">
+      <audio
+        ref={audioRef}
+        src={objectUrl}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onEnded={() => setPlaying(false)}
+        className="hidden"
+      />
+
+      {/* Waveform visual */}
+      <div className="flex items-end justify-center gap-[3px] h-12 px-2">
+        {Array.from({ length: 48 }).map((_, i) => {
+          const heightPct = 20 + Math.abs(Math.sin(i * 0.7 + i * 0.3) * 70)
+          const filled = pct > 0 && (i / 48) * 100 < pct
+          return (
+            <div
+              key={i}
+              className={cn(
+                'w-1 rounded-full transition-all duration-100',
+                filled ? 'bg-violet-400' : 'bg-violet-400/25'
+              )}
+              style={{ height: `${heightPct}%` }}
+            />
+          )
+        })}
+      </div>
+
+      {/* Progress bar */}
+      <div
+        className="relative h-1.5 rounded-full bg-muted cursor-pointer overflow-hidden"
+        onClick={(e) => {
+          if (!audioRef.current || !duration) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          const x = e.clientX - rect.left
+          audioRef.current.currentTime = (x / rect.width) * duration
+        }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 bg-violet-500 rounded-full transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={togglePlay}
+          className="w-9 h-9 rounded-full bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shrink-0 transition-colors shadow-lg shadow-violet-500/30"
+        >
+          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+        </button>
+        <span className="text-xs font-mono text-muted-foreground">
+          {fmt(currentTime)} / {duration ? fmt(duration) : '--:--'}
+        </span>
+        <div className="flex-1" />
+        <span className="text-xs text-muted-foreground truncate max-w-[140px]">{file.name}</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Video Preview Player ─────────────────────────────────────────────────────
+function VideoPreview({ file }: { file: File }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const url = URL.createObjectURL(file)
+    setObjectUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  if (!objectUrl) return null
+
+  return (
+    <div className="mt-4 rounded-xl overflow-hidden border border-pink-500/20 bg-black shadow-xl shadow-pink-500/10">
+      <video
+        src={objectUrl}
+        controls
+        className="w-full max-h-72 object-contain"
+        preload="metadata"
+      />
+      <div className="px-4 py-2 flex items-center gap-2 bg-pink-500/5 border-t border-pink-500/20">
+        <Film className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+        <span className="text-xs text-muted-foreground truncate">{file.name}</span>
+        <span className="text-xs text-muted-foreground ml-auto shrink-0">
+          {(file.size / 1024 / 1024).toFixed(1)} MB
         </span>
       </div>
     </div>
   )
 }
 
+// ─── File Dropzone ────────────────────────────────────────────────────────────
 function FileDropzone({
-  accept,
-  icon: Icon,
-  label,
-  hint,
-  file,
-  onFileChange,
-  onClear,
+  accept, icon: Icon, label, hint, file, onFileChange, onClear,
 }: {
   accept: string
   icon: React.ElementType
@@ -167,24 +253,19 @@ function FileDropzone({
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setDragging(false)
-      const dropped = e.dataTransfer.files[0]
-      if (dropped) onFileChange(dropped)
-    },
-    [onFileChange]
-  )
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    const dropped = e.dataTransfer.files[0]
+    if (dropped) onFileChange(dropped)
+  }, [onFileChange])
 
   return (
     <div
       className={cn(
         'relative flex flex-col items-center justify-center gap-4 w-full rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer transition-all',
-        dragging
-          ? 'border-primary bg-primary/10 scale-[1.01]'
-          : file
-          ? 'border-primary/60 bg-primary/5'
+        dragging ? 'border-primary bg-primary/10 scale-[1.01]'
+          : file ? 'border-primary/60 bg-primary/5'
           : 'border-border hover:border-primary/50 hover:bg-muted/30'
       )}
       onClick={() => !file && inputRef.current?.click()}
@@ -193,10 +274,7 @@ function FileDropzone({
       onDrop={handleDrop}
     >
       <input
-        ref={inputRef}
-        type="file"
-        accept={accept}
-        className="hidden"
+        ref={inputRef} type="file" accept={accept} className="hidden"
         onChange={(e) => e.target.files?.[0] && onFileChange(e.target.files[0])}
       />
 
@@ -231,6 +309,7 @@ function FileDropzone({
   )
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DeepfakePage() {
   const [activeTab, setActiveTab] = useState<'audio' | 'video'>('audio')
 
@@ -249,7 +328,6 @@ export default function DeepfakePage() {
     setAudioLoading(true)
     setAudioError(null)
     setAudioResult(null)
-
     try {
       const form = new FormData()
       form.append('file', audioFile)
@@ -269,7 +347,6 @@ export default function DeepfakePage() {
     setVideoLoading(true)
     setVideoError(null)
     setVideoResult(null)
-
     try {
       const form = new FormData()
       form.append('file', videoFile)
@@ -286,7 +363,6 @@ export default function DeepfakePage() {
 
   return (
     <div className="min-h-screen bg-background relative overflow-x-hidden">
-      {/* Background grid */}
       <div className="absolute inset-0 z-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_100%_100%_at_50%_0%,#000_20%,transparent_100%)]" />
 
       <Sidebar />
@@ -303,9 +379,7 @@ export default function DeepfakePage() {
               </div>
               <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-foreground">
                 Deepfake{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-400">
-                  Detector
-                </span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-pink-400">Detector</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed">
                 Upload a voice recording or video clip to detect AI-generated deepfakes using our state-of-the-art WavLM audio model and CNN-BiLSTM video analysis engine.
@@ -318,15 +392,11 @@ export default function DeepfakePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'audio' | 'video')} className="w-full">
             <TabsList className="grid w-full max-w-sm grid-cols-2 mb-8">
-              <TabsTrigger value="audio" className="gap-2">
-                <Mic className="w-4 h-4" /> Audio
-              </TabsTrigger>
-              <TabsTrigger value="video" className="gap-2">
-                <Video className="w-4 h-4" /> Video
-              </TabsTrigger>
+              <TabsTrigger value="audio" className="gap-2"><Mic className="w-4 h-4" /> Audio</TabsTrigger>
+              <TabsTrigger value="video" className="gap-2"><Video className="w-4 h-4" /> Video</TabsTrigger>
             </TabsList>
 
-            {/* ───── AUDIO TAB ───── */}
+            {/* ── AUDIO TAB ── */}
             <TabsContent value="audio" className="space-y-6">
               <Card className="p-6 bg-card/60 backdrop-blur-xl border-border space-y-6">
                 <div className="flex items-center gap-3">
@@ -349,6 +419,9 @@ export default function DeepfakePage() {
                   onClear={() => { setAudioFile(null); setAudioResult(null); setAudioError(null) }}
                 />
 
+                {/* Audio Preview */}
+                {audioFile && <AudioPreview file={audioFile} />}
+
                 {audioError && (
                   <div className="flex gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                     <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -363,15 +436,9 @@ export default function DeepfakePage() {
                   className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white font-bold tracking-wide dark:shadow-[0_0_20px_rgba(139,92,246,0.3)]"
                 >
                   {audioLoading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Analyzing Voice Patterns...
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Analyzing Voice Patterns...</>
                   ) : (
-                    <>
-                      <ShieldAlert className="w-5 h-5" />
-                      ANALYZE AUDIO
-                    </>
+                    <><ShieldAlert className="w-5 h-5" /> ANALYZE AUDIO</>
                   )}
                 </Button>
               </Card>
@@ -399,7 +466,7 @@ export default function DeepfakePage() {
               </Card>
             </TabsContent>
 
-            {/* ───── VIDEO TAB ───── */}
+            {/* ── VIDEO TAB ── */}
             <TabsContent value="video" className="space-y-6">
               <Card className="p-6 bg-card/60 backdrop-blur-xl border-border space-y-6">
                 <div className="flex items-center gap-3">
@@ -422,6 +489,9 @@ export default function DeepfakePage() {
                   onClear={() => { setVideoFile(null); setVideoResult(null); setVideoError(null) }}
                 />
 
+                {/* Video Preview */}
+                {videoFile && <VideoPreview file={videoFile} />}
+
                 {videoError && (
                   <div className="flex gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                     <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -436,15 +506,9 @@ export default function DeepfakePage() {
                   className="w-full gap-2 bg-pink-600 hover:bg-pink-700 text-white font-bold tracking-wide dark:shadow-[0_0_20px_rgba(236,72,153,0.3)]"
                 >
                   {videoLoading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing Frames... This may take a while
-                    </>
+                    <><Loader2 className="w-5 h-5 animate-spin" /> Processing Frames... This may take a while</>
                   ) : (
-                    <>
-                      <ShieldAlert className="w-5 h-5" />
-                      ANALYZE VIDEO
-                    </>
+                    <><ShieldAlert className="w-5 h-5" /> ANALYZE VIDEO</>
                   )}
                 </Button>
 
