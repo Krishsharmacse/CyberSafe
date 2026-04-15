@@ -58,18 +58,61 @@
         const elements = urlMap.get(result.url) || [];
         
         elements.forEach(el => {
-          // Add visual styling to the link itself
-          el.classList.add('cybersafe-suspicious-link');
+          // Add visual styling to the link itself with inline styles (bypasses CSP)
+          el.style.textDecoration = 'underline wavy #ef4444';
+          el.style.textDecorationThickness = '2px';
+          el.style.textUnderlineOffset = '3px';
+          el.style.transition = 'background-color 0.2s';
+          
+          // Add hover effect
+          el.addEventListener('mouseenter', () => {
+            el.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+          });
+          el.addEventListener('mouseleave', () => {
+            el.style.backgroundColor = 'transparent';
+          });
           
           // Double check we haven't already tagged it
           if (!el.hasAttribute('data-cybersafe-scanned')) {
             el.setAttribute('data-cybersafe-scanned', 'true');
             
-            // Create the warning marker
+            // Create the warning marker with inline styles
             const marker = document.createElement('span');
-            marker.className = 'cybersafe-warning-marker';
             marker.innerHTML = '⚠️ SUSPICIOUS LINK';
             marker.title = `CyberSafe Warning: Risk Score ${result.score}/100.\nReasons: ${result.patterns.join(', ')}`;
+            
+            // Apply inline styles to marker
+            marker.style.display = 'inline-flex';
+            marker.style.alignItems = 'center';
+            marker.style.gap = '4px';
+            marker.style.marginLeft = '6px';
+            marker.style.padding = '2px 6px';
+            marker.style.backgroundColor = '#fef2f2';
+            marker.style.border = '1px solid #ef4444';
+            marker.style.borderRadius = '4px';
+            marker.style.color = '#dc2626';
+            marker.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+            marker.style.fontSize = '11px';
+            marker.style.fontWeight = 'bold';
+            marker.style.lineHeight = '1';
+            marker.style.textDecoration = 'none';
+            marker.style.cursor = 'help';
+            marker.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.2)';
+            marker.style.zIndex = '999999';
+            marker.style.verticalAlign = 'middle';
+            marker.style.transition = 'all 0.2s ease';
+            
+            // Hover effect on marker
+            marker.addEventListener('mouseenter', () => {
+              marker.style.backgroundColor = '#fee2e2';
+              marker.style.transform = 'scale(1.05)';
+              marker.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.4)';
+            });
+            marker.addEventListener('mouseleave', () => {
+              marker.style.backgroundColor = '#fef2f2';
+              marker.style.transform = 'scale(1)';
+              marker.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.2)';
+            });
             
             // Insert immediately after the link
             if (el.nextSibling) {

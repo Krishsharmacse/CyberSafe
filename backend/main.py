@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import cv2
 import shutil
 import asyncio
@@ -290,7 +291,92 @@ class ExportRequest(BaseModel):
 
 video_detector = None
 
+# URL Scanning Heuristics
+def scan_urls(urls):
+    """Scan URLs for phishing/scam patterns"""
+    phishing_patterns = [
+        'phishing', 'fake', 'scam', 'malware', 'suspicious', 'stealer', 'harvester',
+        'credential', 'password', 'login', 'verify', 'confirm', 'update', 'urgent',
+        'act-now', 'bitcoin', 'wallet', 'paypal', 'amazon', 'bank', 'admin', 'panel',
+        'suspicious', 'alert', 'warning', 'secure', 'verify-account'
+    ]
+    
+    results = []
+    for url in urls:
+        try:
+            url_lower = url.lower()
+            score = 0
+            patterns_found = []
+            
+            # Check for suspicious patterns
+            for pattern in phishing_patterns:
+                if pattern in url_lower:
+                    score += 15
+                    patterns_found.append(pattern)
+            
+            # Check for typosquatting common domains
+            typo_domains = {
+                'paypa1': 'PayPal typosquatting',
+                'amaz0n': 'Amazon typosquatting',
+                'goog1e': 'Google typosquatting',
+                'faceb00k': 'Facebook typosquatting',
+            }
+            
+            for typo, reason in typo_domains.items():
+                if typo in url_lower:
+                    score += 20
+                    patterns_found.append(reason)
+            
+            # Check for suspicious TLDs
+            suspicious_tlds = ['.tk', '.ml', '.ga', '.cf']
+            for tld in suspicious_tlds:
+                if url.endswith(tld):
+                    score += 10
+                    patterns_found.append(f'Suspicious TLD: {tld}')
+            
+            # Check for IP addresses instead of domains
+            if re.match(r'http[s]?://\d+\.\d+\.\d+\.\d+', url):
+                score += 25
+                patterns_found.append('IP address used instead of domain')
+            
+            # Fake domains with common patterns
+            if any(x in url_lower for x in ['.fake', '.scam', '.suspicious', '.test']):
+                score += 30
+                patterns_found.append('Clearly fake/test domain')
+            
+            # Cap score at 100
+            score = min(score, 100)
+            
+            results.append({
+                'url': url,
+                'isSuspicious': score >= 50,
+                'score': score,
+                'patterns': patterns_found
+            })
+        except Exception as e:
+            results.append({
+                'url': url,
+                'isSuspicious': False,
+                'score': 0,
+                'patterns': [f'Error scanning: {str(e)}']
+            })
+    
+    return results
+
 # API Endpoints
+@app.post("/api/scan")
+async def scan_urls_endpoint(request_data: dict):
+    """Scan URLs for phishing/scam detection"""
+    try:
+        urls = request_data.get('urls', [])
+        if not urls:
+            return JSONResponse(content={'success': False, 'error': 'No URLs provided'}, status_code=400)
+        
+        results = scan_urls(urls)
+        return JSONResponse(content={'success': True, 'results': results})
+    except Exception as e:
+        return JSONResponse(content={'success': False, 'error': str(e)}, status_code=500)
+
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
     filename = file.filename.lower()
