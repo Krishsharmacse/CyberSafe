@@ -12,6 +12,17 @@ import collections
 import threading
 import queue
 
+import requests
+import json
+import re
+import time
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from enum import Enum
+from duckduckgo_search import DDGS
+from dotenv import load_dotenv
+
 from PIL import Image
 from torchvision import models, transforms
 from ultralytics import YOLO
@@ -22,6 +33,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+from pydantic import BaseModel, Field
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,17 +42,21 @@ app = FastAPI(title="Deepfake Detection API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","http://localhost:3000/deepfake"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Audio Model Configuration
-KERAS_MODEL_PATH = r"C:\Users\ASUS\Desktop\CyberSafe\CyberSafe\ALL MODELS\wavlm_classifier_v2.keras"
+KERAS_MODEL_PATH = r"C:/Users/ASUS/Desktop/CyberSafe/CyberSafe/ALL MODELS/wavlm_classifier_v2.keras"
 WAVLM_MODEL_NAME = "microsoft/wavlm-base-plus"
 SAMPLE_RATE = 16000
 MAX_DURATION = 5
+
+load_dotenv()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
 
 print("⏳ Loading Audio Models...")
 try:
@@ -86,11 +103,16 @@ def predict_audio(file_bytes):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Video Model Configuration
-VIDEO_MODEL_PATH = r"C:\Users\ASUS\Desktop\CyberSafe\CyberSafe\ALL MODELS\best_celebdf_model_Krish.pt"
+VIDEO_MODEL_PATH = r"C:/Users/ASUS/Desktop/CyberSafe/CyberSafe/ALL MODELS/best_celebdf_model_Krish.pt"
 VIDEO_INPUT_SIZE = 224
 VIDEO_SEQ_LENGTH = 16        
 VIDEO_CONFIDENCE_THRESHOLD = 0.60
-VIDEO_EMA_ALPHA = 0.15       
+VIDEO_EMA_ALPHA = 0.15     
+
+MODEL_NAME = "z-ai/glm-4.5-air:free"
+MAX_RETRIES = 3
+RETRY_DELAY = 2
+
 
 class CNN_BiLSTM_Video(nn.Module):
     def __init__(self):
@@ -121,7 +143,7 @@ class CNN_BiLSTM_Video(nn.Module):
 class DeepfakeVideoDetector:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.face_model = YOLO(r"C:\Users\ASUS\Desktop\CyberSafe\CyberSafe\yolov8n-face.pt", task='detect') 
+        self.face_model = YOLO(r"C:/Users/ASUS/Desktop/CyberSafe/CyberSafe/yolov8n-face.pt", task='detect') 
         self.model = CNN_BiLSTM_Video().to(self.device)
         self.model.load_state_dict(torch.load(VIDEO_MODEL_PATH, map_location=self.device))
         self.model.eval()
@@ -202,6 +224,69 @@ class DeepfakeVideoDetector:
     def stop(self):
         self.running = False
         self.thread.join()
+
+
+
+class IncidentTypeEnum(str, Enum):
+    PHISHING = "phishing"
+    RANSOMWARE = "ransomware"
+    DATA_BREACH = "data_breach"
+    MALWARE = "malware"
+    UNAUTHORIZED_ACCESS = "unauthorized_access"
+    DDOS = "ddos"
+    OTHER = "other"
+ 
+ 
+class IncidentRequest(BaseModel):
+    description: str = Field(..., min_length=10, example="I clicked a suspicious email link and now my files are encrypted.")
+    affected_systems: Optional[List[str]] = Field(default=[], example=["work laptop", "personal email"])
+ 
+ 
+class ClassifyRequest(BaseModel):
+    description: str = Field(..., min_length=5)
+ 
+ 
+class ClassifyResponse(BaseModel):
+    incident_type: IncidentTypeEnum
+    severity: int
+    severity_label: str
+ 
+ 
+class SearchResponse(BaseModel):
+    context: str
+    result_count: int
+    sources: List[str]
+ 
+ 
+class IncidentResponseSections(BaseModel):
+    immediate: Optional[str] = None
+    containment: Optional[str] = None
+    recovery: Optional[str] = None
+    prevention: Optional[str] = None
+    red_flags: Optional[str] = None
+ 
+ 
+class FullIncidentResponse(BaseModel):
+    incident_type: IncidentTypeEnum
+    severity: int
+    severity_label: str
+    timestamp: str
+    affected_systems: List[str]
+    response: str
+    sections: IncidentResponseSections
+    sources: List[str]
+    helplines: Dict[str, str]
+ 
+ 
+class ExportRequest(BaseModel):
+    description: str
+    incident_type: IncidentTypeEnum
+    severity: int
+    affected_systems: List[str]
+    response: str
+    sections: Dict
+ 
+
 
 video_detector = None
 
@@ -317,6 +402,302 @@ async def predict_video_endpoint(file: UploadFile = File(...)):
         if os.path.exists(temp_path):
             os.remove(temp_path)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========================== chatbot ===================
+
+def classify_incident(description: str):
+    description_lower = description.lower()
+ 
+    high_severity = ["ransomware", "encrypted", "ransom", "bank", "financial", "ssn", "social security", "credit card"]
+    medium_severity = ["phishing", "clicked link", "email", "password", "credentials", "suspicious"]
+    low_severity = ["spam", "adware", "popup", "suspicious email"]
+ 
+    severity = 3
+    if any(word in description_lower for word in high_severity):
+        severity = 5
+    elif any(word in description_lower for word in low_severity):
+        severity = 2
+ 
+    if any(word in description_lower for word in ["phish", "clicked link", "email link", "sms"]):
+        return IncidentTypeEnum.PHISHING, severity
+    elif any(word in description_lower for word in ["ransom", "encrypted my files", "bitcoin"]):
+        return IncidentTypeEnum.RANSOMWARE, severity
+    elif any(word in description_lower for word in ["breach", "exposed", "leaked", "unauthorized access"]):
+        return IncidentTypeEnum.DATA_BREACH, severity
+    elif any(word in description_lower for word in ["malware", "virus", "trojan", "downloaded file"]):
+        return IncidentTypeEnum.MALWARE, severity
+    elif any(word in description_lower for word in ["unauthorized", "strange login", "unknown device"]):
+        return IncidentTypeEnum.UNAUTHORIZED_ACCESS, severity
+    else:
+        return IncidentTypeEnum.OTHER, severity
+ 
+ 
+def severity_label(severity: int) -> str:
+    labels = {1: "Informational", 2: "Low", 3: "Medium", 4: "High", 5: "Critical"}
+    return labels.get(severity, "Unknown")
+ 
+ 
+def search_mitigation_steps(query: str, incident_type: IncidentTypeEnum = None, max_results: int = 5) -> dict:
+    queries = [
+        query,
+        f"{incident_type.value if incident_type else ''} incident response steps",
+    ]
+ 
+    all_results = []
+    seen_urls = set()
+ 
+    for q in queries[:2]:
+        try:
+            with DDGS() as ddgs:
+                results = list(ddgs.text(q, max_results=max_results))
+                for result in results:
+                    url = result.get('href', '')
+                    if url not in seen_urls:
+                        seen_urls.add(url)
+                        all_results.append({
+                            'title': result.get('title', ''),
+                            'snippet': result.get('body', ''),
+                            'source': url
+                        })
+                time.sleep(1)
+        except Exception:
+            continue
+ 
+    trusted_domains = ['cisa.gov', 'ncsc.gov.uk', 'cert.gov', 'cyber.gov.au', 'gov', 'microsoft.com', 'kaspersky.com']
+    prioritized = [r for r in all_results if any(d in r.get('source', '').lower() for d in trusted_domains)]
+    other = [r for r in all_results if r not in prioritized]
+    final_results = prioritized + other
+ 
+    search_context = ""
+    for i, result in enumerate(final_results[:max_results]):
+        search_context += f"Result {i+1}:\nTitle: {result['title']}\nSource: {result['source']}\nSnippet: {result['snippet']}\n\n"
+ 
+    return {
+        'context': search_context,
+        'result_count': len(final_results),
+        'sources': [r['source'] for r in final_results[:3]]
+    }
+ 
+ 
+def generate_incident_response(description: str, incident_type: IncidentTypeEnum, severity: int,
+                                affected_systems: List[str], search_context: str) -> dict:
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/yourusername/incident-bot",
+        "X-Title": "Incident Response Assistant"
+    }
+ 
+    system_prompt = """You are an expert Cybersecurity Incident Response handler. Provide responses in the following EXACT format:
+ 
+🚨 IMMEDIATE ACTIONS (Do these RIGHT NOW):
+• [Action 1]
+• [Action 2]
+ 
+🔍 CONTAINMENT STEPS (Stop the spread):
+• [Step 1]
+• [Step 2]
+ 
+🛠️ RECOVERY STEPS (Get back to normal):
+• [Step 1]
+• [Step 2]
+ 
+🛡️ PREVENTION TIPS (Avoid this happening again):
+• [Tip 1]
+• [Tip 2]
+ 
+⚠️ RED FLAGS TO WATCH FOR:
+• [Flag 1]
+• [Flag 2]
+ 
+Be specific, actionable, and prioritize steps by urgency."""
+ 
+    user_prompt = f"""INCIDENT DETAILS:
+Type: {incident_type.value}
+Severity Level: {severity}/5
+Description: {description}
+Affected Systems: {', '.join(affected_systems) if affected_systems else 'Not specified'}
+ 
+RECENT GUIDANCE FROM SECURITY SOURCES:
+{search_context}
+ 
+Based on this information, provide your structured response using the format specified above."""
+ 
+    payload = {
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1500
+    }
+ 
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            content = data['choices'][0]['message']['content']
+            sections = parse_structured_response(content)
+            return {'success': True, 'full_response': content, 'sections': sections}
+        except requests.exceptions.Timeout:
+            if attempt == MAX_RETRIES - 1:
+                return {'success': False, 'error': 'API timeout'}
+        except requests.exceptions.RequestException as e:
+            if attempt == MAX_RETRIES - 1:
+                return {'success': False, 'error': str(e)}
+        time.sleep(RETRY_DELAY)
+ 
+    return {'success': False, 'error': 'Max retries exceeded'}
+ 
+ 
+def parse_structured_response(content: str) -> dict:
+    sections = {}
+    current_section = None
+ 
+    for line in content.split('\n'):
+        line = line.strip()
+        if '🚨' in line or 'IMMEDIATE ACTIONS' in line.upper():
+            current_section = 'immediate'
+            sections[current_section] = []
+        elif '🔍' in line or 'CONTAINMENT' in line.upper():
+            current_section = 'containment'
+            sections[current_section] = []
+        elif '🛠' in line or 'RECOVERY' in line.upper():
+            current_section = 'recovery'
+            sections[current_section] = []
+        elif '🛡' in line or 'PREVENTION' in line.upper():
+            current_section = 'prevention'
+            sections[current_section] = []
+        elif '⚠️' in line or 'RED FLAGS' in line.upper():
+            current_section = 'red_flags'
+            sections[current_section] = []
+        elif (line.startswith('•') or line.startswith('-')) and current_section:
+            sections[current_section].append(line.lstrip('•- '))
+ 
+    return {k: '\n'.join(f"  • {item}" for item in v) for k, v in sections.items()}
+ 
+ 
+def get_helplines(incident_type: IncidentTypeEnum = None) -> dict:
+    helplines = {
+        "India": "Dial 1930 or visit cybercrime.gov.in",
+        "USA": "1-888-282-0870 (CISA) or ic3.gov",
+        "UK": "0300 123 2040 (Action Fraud)",
+        "Australia": "1300 292 371 (ReportCyber)",
+        "EU": "Contact your national DPA or ENISA",
+        "Global": "Search for your national CERT"
+    }
+    if incident_type == IncidentTypeEnum.PHISHING:
+        helplines["Phishing Report"] = "reportphishing@apwg.org or report@phishing.gov.uk (UK)"
+    elif incident_type == IncidentTypeEnum.RANSOMWARE:
+        helplines["Ransomware Note"] = "DO NOT pay the ransom. Contact FBI/CISA field office immediately."
+    elif incident_type == IncidentTypeEnum.DATA_BREACH:
+        helplines["Data Breach Note"] = "Contact your bank immediately if financial data was involved."
+    return helplines
+ 
+
+
+
+@app.post("/classify", response_model=ClassifyResponse, tags=["Incident"])
+def classify(request: ClassifyRequest):
+    """
+    Classify an incident description into a type and severity score.
+    Fast, no external calls.
+    """
+    incident_type, severity = classify_incident(request.description)
+    return ClassifyResponse(
+        incident_type=incident_type,
+        severity=severity,
+        severity_label=severity_label(severity)
+    )
+ 
+ 
+@app.post("/search", response_model=SearchResponse, tags=["Incident"])
+def search(request: ClassifyRequest):
+    """
+    Search DuckDuckGo for mitigation guidance based on a description.
+    Auto-classifies and uses incident type to refine results.
+    """
+    incident_type, _ = classify_incident(request.description)
+    query = f"emergency {incident_type.value} incident response mitigation {request.description[:50]}"
+    results = search_mitigation_steps(query, incident_type=incident_type)
+    return SearchResponse(**results)
+ 
+ 
+@app.post("/respond", response_model=FullIncidentResponse, tags=["Incident"])
+def respond(request: IncidentRequest):
+    """
+    Full pipeline: classify → search → generate AI response.
+    Returns structured response with sections and helplines.
+    """
+    if not OPENROUTER_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY not configured on server.")
+ 
+    incident_type, severity = classify_incident(request.description)
+ 
+    query = f"emergency {incident_type.value} incident response mitigation {request.description[:50]}"
+    search_results = search_mitigation_steps(query, incident_type=incident_type)
+ 
+    llm_result = generate_incident_response(
+        description=request.description,
+        incident_type=incident_type,
+        severity=severity,
+        affected_systems=request.affected_systems,
+        search_context=search_results['context']
+    )
+ 
+    if not llm_result['success']:
+        raise HTTPException(status_code=502, detail=f"LLM error: {llm_result.get('error', 'Unknown')}")
+ 
+    return FullIncidentResponse(
+        incident_type=incident_type,
+        severity=severity,
+        severity_label=severity_label(severity),
+        timestamp=datetime.now().isoformat(),
+        affected_systems=request.affected_systems,
+        response=llm_result['full_response'],
+        sections=IncidentResponseSections(**llm_result['sections']),
+        sources=search_results['sources'],
+        helplines=get_helplines(incident_type)
+    )
+ 
+ 
+
+@app.get("/helplines", tags=["Reference"])
+def helplines(incident_type: Optional[IncidentTypeEnum] = None):
+    """
+    Get emergency helpline contacts, optionally filtered by incident type.
+    """
+    return {"helplines": get_helplines(incident_type)}
+ 
+ 
+@app.post("/export", tags=["Incident"])
+def export_report(request: ExportRequest):
+    """
+    Export a previously generated incident response to a JSON report structure.
+    Returns the structured report as JSON (no file I/O on server).
+    """
+    report = {
+        "incident": {
+            "description": request.description,
+            "type": request.incident_type.value,
+            "severity": request.severity,
+            "severity_label": severity_label(request.severity),
+            "affected_systems": request.affected_systems,
+            "timestamp": datetime.now().isoformat()
+        },
+        "response": {
+            "generated_at": datetime.now().isoformat(),
+            "content": request.response,
+            "sections": request.sections
+        }
+    }
+    return report
+
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
