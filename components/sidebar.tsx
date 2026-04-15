@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Shield, BookOpen, AlertCircle, BarChart3, Home, Volume2, Globe, Settings, Gamepad2, Terminal, User, ChevronDown, ChevronUp, Swords, Moon, Sun, Download, ScanEye } from 'lucide-react'
+import { Shield, BookOpen, AlertCircle, BarChart3, Home, Volume2, Globe, Settings, Gamepad2, Terminal, User, ChevronDown, ChevronUp, Swords, Moon, Sun, Download, ScanEye, MessageSquare } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ export function Sidebar({ onLanguageChange, currentLanguage = 'en', onAccessibil
       ]
     },
     { href: '/report', icon: AlertCircle, label: 'Report', id: 'report' },
+    { href: '/chatbot', icon: MessageSquare, label: 'Chatbot Support', id: 'chatbot' },
     { href: '/stats', icon: BarChart3, label: 'Statistics', id: 'stats' },
   ]
 

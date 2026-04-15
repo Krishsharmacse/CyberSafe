@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Shield, BookOpen, AlertCircle, BarChart3, ArrowRight, Gamepad2, Terminal, ScanEye } from 'lucide-react'
+import { Shield, BookOpen, AlertCircle, BarChart3, ArrowRight, Gamepad2, Terminal, ScanEye, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Home() {
@@ -58,6 +58,14 @@ export default function Home() {
       href: '/report',
       color: 'from-orange-600 to-red-600',
       accentColor: 'bg-orange-100 dark:bg-orange-900/30',
+    },
+    {
+      icon: MessageSquare,
+      title: 'Chatbot Support',
+      description: 'Ask the CyberSafe assistant for help with scams, phishing incidents, and safe recovery steps.',
+      href: '/chatbot',
+      color: 'from-cyan-600 to-sky-600',
+      accentColor: 'bg-cyan-100 dark:bg-cyan-900/30',
     },
     {
       icon: BarChart3,
