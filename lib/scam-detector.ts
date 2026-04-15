@@ -82,7 +82,13 @@ const urlPatterns = {
       /\.tk$/i, // free domain
       /\.ml$/i,
       /\.ga$/i,
+      /\.cf$/i, // free domain
+      /\.fake$/i, // test/fake domain
+      /\.scam$/i, // test/scam domain
+      /\.suspicious$/i, // test domain
+      /\.test$/i, // test domain
       /(paypa1|paya1|amaz0n|g00gle)/i, // homoglyph attacks
+      /phishing|malware|stealer|harvester|credential/i, // obvious scam keywords
       /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, // IP address
     ],
     weight: 25,
